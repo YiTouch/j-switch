@@ -1,0 +1,216 @@
+use crate::config::JdkInfo;
+use crate::error::Result;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use walkdir::WalkDir;
+
+pub struct JdkDetector;
+
+impl JdkDetector {
+    /// Detect all JDK installations on the system
+    pub fn detect_all() -> Result<Vec<JdkInfo>> {
+        let mut jdks = Vec::new();
+
+        // Check common installation directories
+        let search_paths = Self::get_search_paths();
+
+        for search_path in search_paths {
+            if let Ok(found) = Self::scan_directory(&search_path) {
+                jdks.extend(found);
+            }
+        }
+        
+        // Check JAVA_HOME
+        if let Ok(java_home) = std::env::var("JAVA_HOME") {
+            let path = PathBuf::from(java_home);
+            if Self::is_valid_jdk(&path) {
+                if let Some(info) = Self::get_jdk_info(&path) {
+                    jdks.push(info);
+                }
+            }
+        }
+        
+        // Deduplicate by path
+        jdks.sort_by(|a, b| a.path.cmp(&b.path));
+        jdks.dedup_by(|a, b| a.path == b.path);
+
+        Ok(jdks)
+    }
+    
+    /// Get common JDK installation paths based on OS
+    fn get_search_paths() -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+
+        #[cfg(target_os = "windows")]
+        {
+            paths.push(PathBuf::from("C:\\"));
+            paths.push(PathBuf::from("D:\\"));
+            paths.push(PathBuf::from("E:\\"));
+            paths.push(PathBuf::from("F:\\"));
+            paths.push(PathBuf::from("G:\\"));
+        }
+        
+        #[cfg(target_os = "macos")]
+        {
+            paths.push(PathBuf::from("/Library/Java/JavaVirtualMachines"));
+            paths.push(PathBuf::from("/System/Library/Java/JavaVirtualMachines"));
+        }
+        
+        #[cfg(target_os = "linux")]
+        {
+            paths.push(PathBuf::from("/usr/lib/jvm"));
+            paths.push(PathBuf::from("/usr/java"));
+            paths.push(PathBuf::from("/opt/java"));
+        }
+        
+        paths
+    }
+    
+    /// Scan a directory for JDK installations
+    fn scan_directory(path: &Path) -> Result<Vec<JdkInfo>> {
+        let mut jdks = Vec::new();
+
+        if !path.exists() {
+            return Ok(jdks);
+        }
+        
+        for entry in WalkDir::new(path)
+            .max_depth(5)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path();
+            if Self::is_valid_jdk(path) {
+                if let Some(info) = Self::get_jdk_info(path) {
+                    jdks.push(info);
+                }
+            }
+        }
+        
+        Ok(jdks)
+    }
+
+    /// Check if a directory is a valid JDK installation
+    pub fn is_valid_jdk(path: &Path) -> bool {
+        if !path.is_dir() {
+            return false;
+        }
+        
+        // Check for java executable
+        let java_exe = Self::get_java_executable(path);
+        if !java_exe.exists() {
+            return false;
+        }
+        
+        // Check for required directories
+        let lib_dir = path.join("lib");
+        lib_dir.exists()
+    }
+
+    /// Get the java executable path for a JDK
+    fn get_java_executable(jdk_path: &Path) -> PathBuf {
+        #[cfg(target_os = "windows")]
+        {
+            jdk_path.join("bin").join("java.exe")
+        }
+        
+        #[cfg(not(target_os = "windows"))]
+        {
+            jdk_path.join("bin").join("java")
+        }
+    }
+    
+    /// Get JDK information by executing java -version
+    pub fn get_jdk_info(path: &Path) -> Option<JdkInfo> {
+        let java_exe = Self::get_java_executable(path);
+
+        if !java_exe.exists() {
+            return None;
+        }
+        
+        let output = Command::new(&java_exe)
+            .arg("-version")
+            .output()
+            .ok()?;
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let (version, vendor, java_version) = Self::parse_version_output(&stderr);
+
+        Some(JdkInfo {
+            path: path.to_path_buf(),
+            version,
+            vendor,
+            java_version,
+        })
+    }
+    
+    /// Parse java -version output
+    fn parse_version_output(output: &str) -> (String, Option<String>, Option<String>) {
+        let mut version = String::from("unknown");
+        let mut vendor = None;
+        let mut java_version = None;
+
+        for line in output.lines() {
+            // Parse version line: java version "1.8.0_291" or openjdk version "17.0.2"
+            if line.contains("version") {
+                if let Some(start) = line.find('"') {
+                    if let Some(end) = line[start + 1..].find('"') {
+                        let full_version = &line[start + 1..start + 1 + end];
+                        java_version = Some(full_version.to_string());
+
+                        // Extract major version
+                        if full_version.starts_with("1.") {
+                            // Old format: 1.8.0_291 -> 8
+                            if let Some(major) = full_version.split('.').nth(1) {
+                                version = major.to_string();
+                            }
+                        } else {
+                            // New format: 17.0.2 -> 17
+                            if let Some(major) = full_version.split('.').next() {
+                                version = major.to_string();
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Parse vendor information
+            if line.contains("OpenJDK") {
+                vendor = Some("OpenJDK".to_string());
+            } else if line.contains("Oracle") {
+                vendor = Some("Oracle".to_string());
+            } else if line.contains("Temurin") || line.contains("Eclipse") {
+                vendor = Some("Eclipse Temurin".to_string());
+            } else if line.contains("Zulu") {
+                vendor = Some("Azul Zulu".to_string());
+            } else if line.contains("Microsoft") {
+                vendor = Some("Microsoft".to_string());
+            }
+        }
+        
+        (version, vendor, java_version)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_version_output() {
+        let output1 = r#"java version "1.8.0_291"
+Java(TM) SE Runtime Environment (build 1.8.0_291-b10)
+Java HotSpot(TM) 64-Bit Server VM (build 25.291-b10, mixed mode)"#;
+        
+        let (version, _, _) = JdkDetector::parse_version_output(output1);
+        assert_eq!(version, "8");
+
+        let output2 = r#"openjdk version "17.0.2" 2022-01-18
+OpenJDK Runtime Environment Temurin-17.0.2+8 (build 17.0.2+8)
+OpenJDK 64-Bit Server VM Temurin-17.0.2+8 (build 17.0.2+8, mixed mode)"#;
+        
+        let (version, _, _) = JdkDetector::parse_version_output(output2);
+        assert_eq!(version, "17");
+    }
+}

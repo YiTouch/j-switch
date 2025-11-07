@@ -1,0 +1,107 @@
+use crate::error::{JdkError, Result};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+pub struct Extractor;
+
+impl Extractor {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// extract file to target dir
+    pub fn extract(&self, archive_path: &Path, target_dir: &Path) -> Result<PathBuf> {
+        fs::create_dir_all(target_dir).map_err(|e| JdkError::IoError(e))?;
+        let extension = archive_path
+            .extension()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| JdkError::ExtractionError("Unknown file type".to_string()))?;
+        match extension {
+            "zip" => self.extract_zip(archive_path, target_dir),
+            "tar" => self.extract_tar_gz(archive_path, target_dir),
+            _ => Err(JdkError::ExtractionError(format!(
+                "Unsupported format: {}",
+                extension
+            ))),
+        }
+    }
+
+    fn extract_zip(&self, archive_path: &Path, target_dir: &Path) -> Result<PathBuf> {
+        use std::fs::File;
+        use std::io;
+        use zip::ZipArchive;
+
+        let file = File::open(archive_path).map_err(|e| JdkError::IoError(e))?;
+        let mut archive =
+            ZipArchive::new(file).map_err(|e| JdkError::ExtractionError(e.to_string()))?;
+
+        for i in 0..archive.len() {
+            let mut file = archive
+                .by_index(i)
+                .map_err(|e| JdkError::ExtractionError(e.to_string()))?;
+            let outpath = match file.enclosed_name() {
+                Some(path) => target_dir.join(path),
+                None => continue,
+            };
+            if file.is_dir() {
+                fs::create_dir_all(&outpath).map_err(|e| JdkError::IoError(e))?;
+            } else {
+                if let Some(parent) = outpath.parent() {
+                    fs::create_dir_all(parent).map_err(|e| JdkError::IoError(e))?;
+                }
+                let mut outfile = File::create(&outpath).map_err(|e| JdkError::IoError(e))?;
+                io::copy(&mut file, &mut outfile).map_err(|e| JdkError::IoError(e))?;
+
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    if let Some(mode) = file.unix_mode() {
+                        fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).ok();
+                    }
+                }
+            }
+        }
+        self.find_jdk_root(target_dir)
+    }
+
+    fn extract_tar_gz(&self, archive_path: &Path, target_dir: &Path) -> Result<PathBuf> {
+        use flate2::read::GzDecoder;
+        use tar::Archive;
+        use std::fs::File;
+
+        let file = File::open(archive_path)
+            .map_err(|e| JdkError::IoError(e))?;
+        let gz = GzDecoder::new(file);
+        let mut archive = Archive::new(gz);
+
+        archive.unpack(target_dir)
+            .map_err(|e| JdkError::ExtractionError(e.to_string()))?;
+
+        self.find_jdk_root(target_dir)
+    }
+
+    fn find_jdk_root(&self, base_dir: &Path) -> Result<PathBuf> {
+        use walkdir::WalkDir;
+        for entry in WalkDir::new(base_dir).max_depth(3) {
+            let entry = entry.map_err(|e| JdkError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                let java_exe = if cfg!(target_os = "windows") {
+                    path.join("bin").join("java.exe")
+                } else {
+                    path.join("bin").join("java")
+                };
+                if java_exe.is_file() {
+                    return Ok(path.to_path_buf());
+                }
+            }
+
+        }
+        Err(JdkError::ExtractionError("JDK root directory not found in archive".to_string()))
+    }
+
+
+}
+
+
