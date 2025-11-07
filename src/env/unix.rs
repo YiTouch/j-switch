@@ -90,8 +90,4 @@ impl EnvUpdater for UnixEnvUpdater {
         Ok(())
     }
 
-    fn update_path(&self, _java_home: &Path) -> Result<()> {
-        // Handled together in update_shell_rc
-        Ok()
-    }
 }

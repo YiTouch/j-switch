@@ -57,15 +57,14 @@ impl EnvUpdater for WindowsEnvUpdater {
 
         println!("[OK] Set JAVA_HOME to: {}", path_str);
         
-        self.update_path(path)?;
+        // Update PATH using the same registry key
+        self.update_path_with_key(&env_key, path)?;
         Self::broadcast_environment_change()?;
 
         Ok(())
     }
-
-    fn update_path(&self, java_home: &Path) -> Result<()> {
-        let env_key = Self::get_environment_key()?;
-        
+    
+    fn update_path_with_key(&self, env_key: &RegKey, java_home: &Path) -> Result<()> {
         let path_value: String = env_key
             .get_value("Path")
             .unwrap_or_else(|_| String::new());
@@ -79,10 +78,13 @@ impl EnvUpdater for WindowsEnvUpdater {
             .map(|s| s.to_string())
             .collect();
 
-        // Remove existing Java bin paths
+        // Remove existing Java bin paths (more precise matching)
+        let java_home_str = java_home.to_string_lossy().to_lowercase();
         paths.retain(|p| {
             let p_lower = p.to_lowercase();
-            !p_lower.contains("java") && !p_lower.contains("jdk") && !p_lower.contains("jre")
+            // Only remove paths that are actually within a JDK installation
+            !(p_lower.contains(&java_home_str) || 
+              (p_lower.contains("\\bin") && (p_lower.contains("\\jdk") || p_lower.contains("\\jre"))))
         });
 
         // Add new Java bin path at the beginning
