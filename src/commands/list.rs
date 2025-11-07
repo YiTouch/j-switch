@@ -116,11 +116,11 @@ pub fn list_command() -> Result<()> {
     
     if !has_active {
         println!("\n{}", "No JDK is currently active.".yellow());
-        println!("Use {} to activate a JDK.", "j-switch use <version>".green());
+        println!("Use {} to activate a JDK.", "jsh use <version>".green());
     } else if java_home_path.is_some() && current_version.is_none() {
         println!("\n{}", "Tip:".cyan().bold());
-        println!("  Your JAVA_HOME is set, but not managed by j-switch.");
-        println!("  Run {} to let j-switch manage it.", "j-switch use <version>".green());
+        println!("  Your JAVA_HOME is set, but not managed by jsh.");
+        println!("  Run {} to let jsh manage it.", "jsh use <version>".green());
     }
     
     Ok(())

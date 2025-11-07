@@ -77,7 +77,7 @@ pub async fn search_command(keyword: Option<String>) -> Result<()> {
     println!("\n{}", "-".repeat(80).bright_black());
     println!("Total: {} version(s)", versions.len());
     println!("\nUse: {} to download and install",
-             "j-switch download <version>".green());
+             "jsh download <version>".green());
 
     Ok(())
 }

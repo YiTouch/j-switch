@@ -198,10 +198,10 @@ jsh 将配置存储在 `config.json`：
 **Windows**：
 ```powershell
 # 临时添加到 PATH（当前会话）
-$env:Path += ";D:\xx\xx\(j-switch.exe)"
+$env:Path += ";D:\xx\xx\(jsh.exe)"
 
 # 永久添加到 PATH（以管理员身份运行 PowerShell）
-[Environment]::SetEnvironmentVariable("Path", $env:Path + ";D:\xx\xx\(j-switch.exe)", "User")
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";D:\xx\xx\(jsh.exe)", "User")
 ```
 
 ### 🐛 故障排除

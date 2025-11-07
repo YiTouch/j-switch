@@ -44,11 +44,11 @@ impl UnixEnvUpdater {
 
             for line in reader.lines() {
                 let line = line.map_err(|e| JdkError::IoError(e))?;
-                if line.contains("export JAVA_HOME=") && line.contains("# j-switch managed") {
-                    lines.push(format!("export JAVA_HOME=\"{}\"  # j-switch managed", java_home_str));
+                if line.contains("export JAVA_HOME=") && line.contains("# jsh managed") {
+                    lines.push(format!("export JAVA_HOME=\"{}\"  # jsh managed", java_home_str));
                     found_java_home = true;
-                } else if line.contains("export PATH=") && line.contains("$JAVA_HOME/bin") && line.contains("# j-switch managed") {
-                    lines.push(format!("export PATH=\"$JAVA_HOME/bin:$PATH\"  # j-switch managed"));
+                } else if line.contains("export PATH=") && line.contains("$JAVA_HOME/bin") && line.contains("# jsh managed") {
+                    lines.push(format!("export PATH=\"$JAVA_HOME/bin:$PATH\"  # jsh managed"));
                     found_path = true;
                 } else {
                     lines.push(line);
@@ -58,11 +58,11 @@ impl UnixEnvUpdater {
 
         // Add new entries if not found
         if !found_java_home {
-            lines.push(format!("\n# j-switch managed - do not edit manually"));
-            lines.push(format!("export JAVA_HOME=\"{}\"  # j-switch managed", java_home_str));
+            lines.push(format!("\n# jsh managed - do not edit manually"));
+            lines.push(format!("export JAVA_HOME=\"{}\"  # jsh managed", java_home_str));
         }
         if !found_path {
-            lines.push(format!("export PATH=\"$JAVA_HOME/bin:$PATH\"  # j-switch managed"));
+            lines.push(format!("export PATH=\"$JAVA_HOME/bin:$PATH\"  # jsh managed"));
         }
 
         // Write back

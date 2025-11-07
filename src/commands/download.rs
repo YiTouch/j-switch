@@ -66,8 +66,8 @@ pub async fn download_command(version: &str, vendor: &str) -> Result<()> {
 
     println!("\n{} {}", "[SUCCESS]".green().bold(), "JDK installed successfully!".green());
     println!("\n{}", "Next steps:".bold());
-    println!("  1. List all JDKs:    {}", "j-switch list".cyan());
-    println!("  2. Activate this JDK: {}", format!("j-switch use {}", version).cyan());
+    println!("  1. List all JDKs:    {}", "jsh list".cyan());
+    println!("  2. Activate this JDK: {}", format!("jsh use {}", version).cyan());
 
     Ok(())
 }

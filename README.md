@@ -194,10 +194,10 @@ Configuration example:
 **Windows**:
 ```powershell
 # Temporarily add to PATH (current session)
-$env:Path += ";D:\xx\xx\(j-switch.exe)"
+$env:Path += ";D:\xx\xx\(jsh.exe)"
 
 # Permanently add to PATH (run PowerShell as Administrator)
-[Environment]::SetEnvironmentVariable("Path", $env:Path + ";D:\xx\xx\(j-switch.exe)", "User")
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";D:\xx\xx\(jsh.exe)", "User")
 ```
 
 ### 🐛 Troubleshooting
